@@ -7,9 +7,13 @@ class DownloadVideos(Step):
     def process(self, data, inputs, utils):
         yt_set = set([found.yt for found in data])
         print("video to download =", len(yt_set))
+        cnt = 0
 
         for yt in yt_set:
             url = yt.url
+            if cnt > inputs['limit']:
+                print('up to limit')
+                break
 
             if utils.video_file_exists(yt):
                 print(f'found existing video for {url}, skipping')
@@ -17,5 +21,6 @@ class DownloadVideos(Step):
 
             print('downloading', url)
             YouTube(url).streams.first().download(output_path=VIDEOS_DIR, filename=yt.id + '.mp4')
+            cnt += 1
 
         return data
