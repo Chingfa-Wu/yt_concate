@@ -1,5 +1,9 @@
 from .step import Step
 from yt_concate.model.found import Found
+from pytube import YouTube
+
+import logging
+logger = logging.getLogger()
 
 
 class Search(Step):
@@ -18,5 +22,5 @@ class Search(Step):
                     f = Found(yt, caption, time)
                     found.append(f)
 
-        print(len(found))
+        logger.info(f'found {len(found)} part')
         return found

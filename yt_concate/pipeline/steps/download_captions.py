@@ -1,50 +1,65 @@
+import time
+
+from threading import Thread
+from concurrent.futures import ThreadPoolExecutor
+
 from pytube import YouTube
 
 from .step import Step
-from .step import StepException
+
+import logging
+logger = logging.getLogger()
+
+threads = []
 
 
 class DownloadCaptions(Step):
     def process(self, data, inputs, utils):
-        channel_id = inputs['channel_id']
-        black_list = self.read_file(utils.get_video_list_filepath(f'{channel_id}_blacklist'))
+        start = time.time()
+        with ThreadPoolExecutor() as executor:
+            for yt in data:
+                logger.info(f'downloading caption for {yt.id}')
+                if inputs['fast'] and utils.caption_file_exists(yt):
+                    logger.info('found exists file')
+                    continue
+                executor.submit(self.dl_cap(yt, utils,))
 
-        for yt in data:
-            print('downloading caption for', yt.id)
-            if utils.caption_file_exists(yt):
-                print('found exists file')
-                continue
-            if yt.url in black_list:
-                print(f'this video {yt.url} is in black list')
-                continue
-
-            try:
-                source = YouTube(yt.url)
-                en_caption = source.captions['a.en']
-                en_caption_convert_to_srt = (en_caption.generate_srt_captions())
-            except AttributeError:
-                continue
-            except KeyError:
-                print('KeyError when downloading caption for', yt.url, 'adding to black list')
-                black_list.append(yt.url)
-                continue
-            print(en_caption_convert_to_srt)
-
-            text_file = open(utils.get_caption_filepath(yt.url), "w", encoding='utf-8')
-            text_file.write(en_caption_convert_to_srt)
-            text_file.close()
-
-        self.write_to_file(black_list, utils.get_video_list_filepath(f'{channel_id}_blacklist'))
+        end = time.time()
+        print(f'use {end-start} sec')
         return data
 
-    def write_to_file(self, lst, filepath):
-        with open(filepath, 'w') as f:
-            for url in lst:
-                f.write(url + '\n')
+    def dl_cap(self, yt, utils):
+        try:
+            source = YouTube(yt.url)
+            if source.length < 30*60:
+                en_caption = source.captions['a.en']
+                en_caption_convert_to_srt = (en_caption.generate_srt_captions())
+                text_file = open(utils.get_caption_filepath(yt.url), "w", encoding='utf-8')
+                text_file.write(en_caption_convert_to_srt)
+                text_file.close()
 
-    def read_file(self, filepath):
-        video_links = []
-        with open(filepath, 'r') as f:
-            for url in f:
-                video_links.append(url.strip())
-        return video_links
+                lines = open(utils.get_caption_filepath(yt.url), "r", encoding='utf-8').readlines()
+                start_t, end_t, end = self.parse_caption_time(lines[-2])
+                if end > source.length:
+                    lines[-2] = f'{start_t} --> {end_t}:{source.length / (3600*60)},000'
+                    open(utils.get_caption_filepath(yt.url), "w", encoding='utf-8').write(lines)
+            else:
+                logger.debug(f'this video {yt.id} is too long')
+        except (KeyError, AttributeError):
+            logger.warning(f'Error when downloading {yt.id}')
+        except TypeError:
+            pass
+
+    def parse_caption_time(self, caption_time):
+        start, end = caption_time.split(' --> ')
+        return start, self.parse_time_cut(end), self.parse_time_cnt(end)
+
+    @staticmethod
+    def parse_time_cnt(time_str):
+        h, m, s = time_str.split(':')
+        s, ms = s.split(',')
+        return int(h)*3600 + int(m)*60 + int(s) + int(ms) / 1000
+
+    def parse_time_cut(self, time_str):
+        h, m, s = time_str.split(':')
+        return f'{h}:{m}'

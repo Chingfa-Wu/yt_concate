@@ -4,13 +4,16 @@ import json
 from yt_concate.settings import API_KEY
 from yt_concate.pipeline.steps.step import Step
 
+import logging
+logger = logging.getLogger()
+
 
 class GetVideoList(Step):
     def process(self, data, inputs, utils):
         channel_id = inputs['channel_id']
 
         if utils.video_list_file_exists(channel_id):
-            print('found video list file for ' + channel_id)
+            logger.info('found video list file for ' + channel_id)
             return self.read_file(utils.get_video_list_filepath(channel_id))
 
         base_video_url = 'https://www.youtube.com/watch?v='
@@ -33,7 +36,7 @@ class GetVideoList(Step):
                 url = first_url + '&pageToken={}'.format(next_page_token)
             except KeyError:
                 break
-        print(len(video_links))
+        logger.info(f'get {len(video_links)} video')
         self.write_to_file(video_links, utils.get_video_list_filepath(channel_id))
         return video_links
 
