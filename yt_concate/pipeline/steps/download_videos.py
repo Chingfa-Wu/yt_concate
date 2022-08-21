@@ -1,4 +1,5 @@
 from threading import Thread
+from concurrent.futures import ThreadPoolExecutor
 from time import time
 
 from pytube import YouTube
@@ -19,28 +20,24 @@ class DownloadVideos(Step):
         cnt = 0
 
         start = time()
-        for yt in yt_set:
-            url = yt.url
-            if cnt > inputs['limit']:
-                logger.info('up to limit')
-                break
+        with ThreadPoolExecutor() as executor:
+            for yt in yt_set:
+                url = yt.url
+                if cnt > inputs['limit']:
+                    logger.info('up to limit')
+                    break
 
-            if inputs['fast'] and utils.video_file_exists(yt):
-                logger.info(f'found existing video for {url}, skipping')
-                continue
+                if inputs['fast'] and utils.video_file_exists(yt):
+                    logger.info(f'found existing video for {url}, skipping')
+                    continue
 
-            logger.info(f'downloading {url}')
-            threads.append(Thread(target=self.dl_video, args=(yt,)))
+                logger.info(f'downloading {url}')
+                executor.submit(self.dl_video(yt, ))
 
-            cnt += 1
-
-        for thread in threads:
-            thread.start()
-
-        for thread in threads:
-            thread.join()
+                cnt += 1
 
         end = time()
+        logger.info(f'download video using {end-start}')
         return data
 
     @staticmethod

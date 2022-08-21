@@ -25,7 +25,7 @@ class DownloadCaptions(Step):
                 executor.submit(self.dl_cap(yt, utils,))
 
         end = time.time()
-        print(f'use {end-start} sec')
+        logger.info(f'download caption using {end - start}')
         return data
 
     def dl_cap(self, yt, utils):
